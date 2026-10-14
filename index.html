@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rotation">
+<meta name="theme-color" content="#F1EFF6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15111D" media="(prefers-color-scheme: dark)">
+<title>Rotation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F1EFF6;--surface:#FFFFFF;--ink:#1D1630;--muted:#6C6680;--line:#DDD8E8;
+  --accent:#5B33C9;--accent-ink:#FFFFFF;--err:#B4233F;
+  --S:#E9A13A;--A:#7B57E0;--B:#2A9D8F;--C:#5F7FC4;--D:#8E879E;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#15111D;--surface:#211A2D;--ink:#EEE9F8;--muted:#A39BB6;--line:#342A45;
+    --accent:#A88BFF;--accent-ink:#15111D;--err:#FF7A93;color-scheme:dark}
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))}
+h1,h2,h3{font-family:"Bricolage Grotesque",Figtree,system-ui,sans-serif;margin:0;line-height:1.08}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:640px;margin:0 auto;padding:0 18px}
+header.top{display:flex;align-items:center;justify-content:space-between;max-width:640px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top,0px)) 18px 0}
+.brand{font:800 20px "Bricolage Grotesque",sans-serif;letter-spacing:-.02em}
+.linkbtn{border:0;background:none;color:var(--muted);font-weight:600;font-size:14px;cursor:pointer;padding:8px 0}
+.page-title{font-size:clamp(38px,11vw,54px);font-weight:800;letter-spacing:-.04em;margin:14px 0 6px}
+.lede{color:var(--muted);margin:0 0 18px;max-width:46ch}
+.note{color:var(--muted);font-size:14px;margin:-4px 0 12px}
+.muted{color:var(--muted)}
+.err{color:var(--err);font-weight:500}
+.seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;margin:0 0 10px}
+.seg button{flex:1;border:0;background:none;color:var(--muted);font-weight:600;font-size:14px;padding:9px 6px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.seg.small button{font-size:13px;padding:6px}
+.list{list-style:none;margin:6px 0 0;padding:0}
+.row{display:grid;grid-template-columns:26px 52px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.row.nopos{grid-template-columns:52px minmax(0,1fr) auto}
+.pos{font:600 15px "Bricolage Grotesque",sans-serif;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.art{width:52px;height:52px;border-radius:6px;object-fit:cover;background:var(--line);display:block}
+.art.round{border-radius:50%}
+.art.ph{display:grid;place-items:center;font:800 20px "Bricolage Grotesque",sans-serif;color:var(--muted)}
+.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{color:var(--muted);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tierbtn{min-width:44px;height:40px;border-radius:10px;border:1.5px dashed var(--muted);background:none;color:var(--muted);font:800 17px "Bricolage Grotesque",sans-serif;cursor:pointer}
+.tierbtn[data-t]{border:0;color:#fff}
+.tierbtn[data-t=S],.t-S{background:var(--S);color:#2B1A00!important}
+.tierbtn[data-t=A],.t-A{background:var(--A)}
+.tierbtn[data-t=B],.t-B{background:var(--B)}
+.tierbtn[data-t=C],.t-C{background:var(--C)}
+.tierbtn[data-t=D],.t-D{background:var(--D)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;font-size:15px;text-decoration:none;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn[disabled]{opacity:.5;cursor:default}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+/* setup */
+.steps{padding-left:22px;margin:0 0 20px}
+.steps li{margin-bottom:12px;padding-left:4px}
+code{font-size:13px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:2px 6px;word-break:break-all}
+.field{display:flex;gap:8px;margin:0 0 12px}
+.field input,.search input{flex:1;min-width:0;min-height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 14px}
+/* rank */
+.search{display:flex;gap:8px;margin:4px 0 14px}
+.results{margin:-6px 0 18px}
+.tier{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;margin-bottom:8px}
+.tier .lab{border-radius:12px;display:grid;place-items:center;font:800 28px "Bricolage Grotesque",sans-serif;color:#fff;min-height:84px}
+.cells{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;padding:8px;border-radius:12px;background:var(--surface);border:1px solid var(--line);min-height:84px}
+.cell{width:60px;border:0;padding:0;background:none;cursor:pointer;text-align:center}
+.cell .art{width:60px;height:60px}
+.cell span{display:block;font-size:11px;line-height:1.25;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:4px}
+.empty-cell{color:var(--muted);font-size:13px;align-self:center;padding-left:4px}
+/* discover */
+.deck{display:grid;place-items:center;padding:6px 0 22px}
+.record{position:relative;width:min(68vw,272px);aspect-ratio:1;border-radius:50%;border:0;padding:0;cursor:pointer;
+  background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.16),transparent 42%),repeating-radial-gradient(circle,#1a1322 0 1.5px,#2a2037 1.5px 3px);
+  box-shadow:0 22px 44px -22px rgba(40,12,80,.7)}
+.record .label{position:absolute;inset:31%;border-radius:50%;background:var(--accent) center/cover no-repeat;display:grid;place-items:center;color:var(--accent-ink);font:800 21px "Bricolage Grotesque",sans-serif}
+.record .label.img::after{content:"";width:12%;aspect-ratio:1;border-radius:50%;background:var(--bg)}
+.record.spinning{animation:spin 1.2s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.result{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:28px}
+.kind{color:var(--accent);font-weight:600;font-size:14px;margin:0 0 4px}
+.result h2{font-size:28px;letter-spacing:-.025em}
+.why{margin:12px 0 16px}
+/* updates */
+.foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 28px;color:var(--muted);font-size:14px}
+/* sheet + nav */
+#sheet{position:fixed;inset:0;z-index:20}
+#sheet[hidden]{display:none}
+.scrim{position:absolute;inset:0;background:rgba(10,6,18,.5)}
+.panel{position:absolute;left:0;right:0;bottom:0;max-width:640px;margin:0 auto;background:var(--surface);border-radius:22px 22px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(100%)}to{transform:none}}
+.sh-head{display:grid;grid-template-columns:64px minmax(0,1fr);gap:14px;align-items:center;margin-bottom:18px}
+.sh-head .art{width:64px;height:64px}
+.tierpick{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:6px 0 16px}
+.tp{height:58px;border-radius:12px;border:3px solid transparent;font:800 24px "Bricolage Grotesque",sans-serif;color:#fff;cursor:pointer;opacity:.5}
+.tp[aria-pressed=true]{opacity:1;border-color:var(--ink)}
+@media (hover:hover){.tp:hover{opacity:1}}
+.sh-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+nav#nav{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+nav#nav[hidden]{display:none}
+nav button{flex:1;max-width:140px;border:0;background:none;color:var(--muted);font-weight:600;font-size:12px;padding:6px 0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+nav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button[aria-current=page]{color:var(--accent)}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){.record.spinning,.panel{animation:none}#toast{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="brand">Rotation</span>
+  <button class="linkbtn" id="signout" data-act="signout" hidden>Disconnect</button>
+</header>
+<main id="app"></main>
+<nav id="nav" hidden>
+  <button data-act="tab" data-tab="top"><svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Top</button>
+  <button data-act="tab" data-tab="rank"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="13" height="4" rx="1"/><rect x="3" y="16" width="8" height="4" rx="1"/></svg>Rank</button>
+  <button data-act="tab" data-tab="discover"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>Discover</button>
+  <button data-act="tab" data-tab="updates"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/></svg>New</button>
+</nav>
+<div id="sheet" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem('rot_'+k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem('rot_'+k, JSON.stringify(v)); }catch{} },
+  del(k){ try{ localStorage.removeItem('rot_'+k); }catch{} }
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rint = n => Math.floor(Math.random() * n);
+const rpick = a => a[rint(a.length)];
+const shuffle = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
+function wpick(arr){ const tot = arr.reduce((s, x) => s + x.w, 0); let r = Math.random() * tot; for (const x of arr){ r -= x.w; if (r <= 0) return x; } return arr[arr.length - 1]; }
+const daysAgo = d => (Date.now() - Date.parse(d + 'T00:00:00')) / 864e5;
+const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'});
+async function pool(items, n, fn){ let i = 0; await Promise.all(Array.from({length:n}, async () => { while (i < items.length){ const x = items[i++]; await fn(x); } })); }
+let tt; function toast(m){ const el = $('#toast'); el.textContent = m; el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 2400); }
+
+/* ---------- constants & state ---------- */
+const API = 'https://api.spotify.com/v1';
+const SCOPES = 'user-top-read user-read-recently-played user-library-read user-follow-read';
+const REDIRECT = location.origin + location.pathname;
+const TIERS = ['S','A','B','C','D'];
+const TW = {S:5, A:4, B:3, C:2, D:0};
+const NOUN = {artist:'artist', album:'album', track:'song'};
+const st = { tab: LS.get('tab','top'), topType:'artist', range:'medium_term', rankType:'artist', disc:'any', days:'7',
+  top:{}, topBusy:false, topErr:null, busy:false, err:null, result:null, upd:LS.get('upd',null), updBusy:false, updErr:null,
+  sheet:null, search:null, q:'' };
+let meta = LS.get('meta', {});
+let ranks = LS.get('ranks', {artist:[], album:[], track:[]});
+let lists = LS.get('lists', {heard:[], nope:[]});
+const seen = {};
+const itemOf = k => seen[k] || meta[k];
+
+/* ---------- item shapes ---------- */
+const pickImg = im => (im && im.length) ? (im[1] || im[0]).url : '';
+function fromArtist(a){ return {type:'artist', id:a.id, k:'artist:'+a.id, name:a.name, sub:(a.genres||[]).slice(0,2).join(', ') || 'Artist', img:pickImg(a.images), url:a.external_urls?.spotify, genres:a.genres||[]}; }
+function fromTrack(t){ return {type:'track', id:t.id, k:'track:'+t.id, name:t.name, sub:t.artists.map(a=>a.name).join(', '), img:pickImg(t.album?.images), url:t.external_urls?.spotify, artists:t.artists.map(a=>({id:a.id, name:a.name}))}; }
+function fromAlbum(al){ const y = (al.release_date||'').slice(0,4); return {type:'album', id:al.id, k:'album:'+al.id, name:al.name, sub:al.artists.map(a=>a.name).join(', ') + (y ? ', '+y : ''), img:pickImg(al.images), url:al.external_urls?.spotify, artists:al.artists.map(a=>({id:a.id, name:a.name}))}; }
+
+/* ---------- rankings ---------- */
+function remember(it){ const {type,id,k,name,sub,img,url,genres,artists} = it; meta[k] = {type,id,k,name,sub,img,url,genres,artists}; LS.set('meta', meta); }
+function tierOf(k){ const t = k.split(':')[0]; const r = (ranks[t]||[]).find(x => x.k === k); return r ? r.t : null; }
+function setTier(it, t){
+  remember(it);
+  const arr = ranks[it.type]; const i = arr.findIndex(x => x.k === it.k);
+  if (t === null){ if (i > -1) arr.splice(i, 1); }
+  else if (i > -1){ if (arr[i].t !== t){ arr.splice(i, 1); arr.push({k:it.k, t}); } }
+  else arr.push({k:it.k, t});
+  LS.set('ranks', ranks);
+}
+function moveInTier(k, dir){
+  const arr = ranks[k.split(':')[0]]; const i = arr.findIndex(x => x.k === k); if (i < 0) return;
+  let j = i + dir; while (j >= 0 && j < arr.length && arr[j].t !== arr[i].t) j += dir;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]]; LS.set('ranks', ranks);
+}
+
+/* ---------- auth (PKCE) ---------- */
+function randStr(n){ const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; return Array.from(crypto.getRandomValues(new Uint8Array(n)), b => c[b % c.length]).join(''); }
+async function challenge(v){ const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)); return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+async function login(){
+  const v = randStr(64), state = randStr(16);
+  LS.set('pkce', v); LS.set('oauth_state', state);
+  const p = new URLSearchParams({client_id:LS.get('cid'), response_type:'code', redirect_uri:REDIRECT, scope:SCOPES, code_challenge_method:'S256', code_challenge:await challenge(v), state});
+  location.href = 'https://accounts.spotify.com/authorize?' + p;
+}
+function saveTok(j){ const t = LS.get('tok', {}); LS.set('tok', {access:j.access_token, refresh:j.refresh_token || t.refresh, exp:Date.now() + (j.expires_in - 60) * 1000}); }
+async function handleCallback(){
+  const q = new URLSearchParams(location.search);
+  if (!q.has('code') && !q.has('error')) return;
+  history.replaceState(null, '', REDIRECT);
+  if (q.get('error')) throw new Error(q.get('error') === 'access_denied' ? 'Spotify connection was cancelled.' : 'Spotify returned an error: ' + q.get('error'));
+  if (q.get('state') !== LS.get('oauth_state')) throw new Error('The login check didn\u2019t match. Tap Connect Spotify again.');
+  const r = await fetch('https://accounts.spotify.com/api/token', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({client_id:LS.get('cid'), grant_type:'authorization_code', code:q.get('code'), redirect_uri:REDIRECT, code_verifier:LS.get('pkce')})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error_description || 'Could not finish connecting to Spotify.');
+  saveTok(j); LS.del('pkce'); LS.del('oauth_state');
+}
+let refreshing = null;
+async function getToken(){
+  const t = LS.get('tok'); if (!t) return null;
+  if (Date.now() < t.exp) return t.access;
+  if (!t.refresh) return null;
+  if (!refreshing) refreshing = (async () => {
+    const r = await fetch('https://accounts.spotify.com/api/token', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({grant_type:'refresh_token', refresh_token:t.refresh, client_id:LS.get('cid')})});
+    if (!r.ok){ LS.del('tok'); return null; }
+    const j = await r.json(); saveTok(j); return j.access_token;
+  })().finally(() => { refreshing = null; });
+  return refreshing;
+}
+async function api(path, retry = true){
+  const tk = await getToken();
+  if (!tk){ render(); throw new Error('Your Spotify session ended. Connect again.'); }
+  const r = await fetch(API + path, {headers:{Authorization:'Bearer ' + tk}});
+  const ep = path.split('?')[0];
+  if (r.status === 429){ if (retry){ await sleep(4000); return api(path, false); } throw new Error('Spotify is limiting requests right now. Wait a minute and try again.'); }
+  if (r.status === 401){ if (retry){ const t = LS.get('tok'); if (t){ t.exp = 0; LS.set('tok', t); } return api(path, false); } LS.del('tok'); render(); throw new Error('Your Spotify session ended. Connect again.'); }
+  if (r.status === 403) throw new Error('Spotify refused ' + ep + '. In your Spotify developer app, add your account under User Management.');
+  if (!r.ok) throw new Error('Spotify returned ' + r.status + ' for ' + ep + '.');
+  return r.status === 204 ? null : r.json();
+}
+
+/* ---------- data: top ---------- */
+async function loadTop(range){
+  if (st.top[range]) return st.top[range];
+  const c = LS.get('top_' + range);
+  if (c && Date.now() - c.ts < 3600e3){ st.top[range] = c.d; return c.d; }
+  const [a, t] = await Promise.all([api(`/me/top/artists?limit=50&time_range=${range}`), api(`/me/top/tracks?limit=50&time_range=${range}`)]);
+  const alb = {};
+  t.items.forEach((tr, i) => { if (!tr.album) return; const k = 'album:' + tr.album.id; alb[k] ??= {it:fromAlbum(tr.album), score:0, n:0}; alb[k].score += 50 - i; alb[k].n++; });
+  const d = {
+    artists: a.items.map(fromArtist),
+    tracks: t.items.map(fromTrack),
+    albums: Object.values(alb).sort((x, y) => y.score - x.score).map(x => ({...x.it, extra:`${x.n} of your top songs`}))
+  };
+  st.top[range] = d; LS.set('top_' + range, {ts:Date.now(), d});
+  return d;
+}
+async function fetchTop(){
+  st.topBusy = true;
+  try{ await loadTop(st.range); }catch(e){ st.topErr = e.message; }
+  finally{ st.topBusy = false; render(); }
+}
+
+/* ---------- data: discover ---------- */
+async function buildKnown(){
+  const k = LS.get('known');
+  if (k && Date.now() - k.ts < 6 * 3600e3) return {artists:new Set(k.a), tracks:new Set(k.t), albums:new Set(k.al)};
+  const A = new Set(), T = new Set(), AL = new Set();
+  const addT = tr => { if (!tr) return; T.add(tr.id); if (tr.album) AL.add(tr.album.id); (tr.artists||[]).forEach(a => A.add(a.id)); };
+  const quiet = p => p.catch(() => {});
+  const jobs = [];
+  for (const r of ['short_term','medium_term','long_term']){
+    jobs.push(quiet(api(`/me/top/artists?limit=50&time_range=${r}`).then(j => j.items.forEach(a => A.add(a.id)))));
+    jobs.push(quiet(api(`/me/top/tracks?limit=50&time_range=${r}`).then(j => j.items.forEach(addT))));
+  }
+  jobs.push(quiet(api('/me/player/recently-played?limit=50').then(j => j.items.forEach(x => addT(x.track)))));
+  for (const off of [0, 50, 100]) jobs.push(quiet(api(`/me/tracks?limit=50&offset=${off}`).then(j => j.items.forEach(x => addT(x.track)))));
+  jobs.push(quiet(api('/me/following?type=artist&limit=50').then(j => j.artists.items.forEach(a => A.add(a.id)))));
+  await Promise.all(jobs);
+  LS.set('known', {ts:Date.now(), a:[...A], t:[...T], al:[...AL]});
+  return {artists:A, tracks:T, albums:AL};
+}
+async function getSeeds(){
+  const out = [];
+  for (const type of ['artist','album','track']) for (const r of ranks[type]){
+    const w = TW[r.t], m = meta[r.k]; if (!w || !m) continue;
+    if (type === 'artist') out.push({id:m.id, name:m.name, w, why:`${m.name} is in your ${r.t} tier`});
+    else (m.artists||[]).slice(0,1).forEach(a => out.push({id:a.id, name:a.name, w:Math.max(1, w - 1), why:`you put ${m.name} in your ${r.t} tier`}));
+  }
+  if (out.length < 3){
+    const d = await loadTop('medium_term');
+    d.artists.slice(0, 20).forEach((a, i) => out.push({id:a.id, name:a.name, w:Math.max(1, 4 - Math.floor(i / 5)), why:`${a.name} is one of your most played artists`}));
+  }
+  return out;
+}
+async function findNewArtist(seed, known, block){
+  for (const s of shuffle(['genre','collab'])){
+    try{
+      if (s === 'genre'){
+        let g = meta['artist:' + seed.id]?.genres;
+        if (!g || !g.length){ const a = await api('/artists/' + seed.id); g = a.genres || []; }
+        if (!g.length) continue;
+        const genre = rpick(g);
+        const j = await api(`/search?type=artist&limit=10&offset=${rint(4) * 10}&q=${encodeURIComponent(`genre:"${genre}"`)}`);
+        const c = (j.artists?.items || []).filter(a => a && a.id !== seed.id && !known.artists.has(a.id) && !block.has(a.id));
+        if (c.length) return {artist:rpick(c), via:`shares the ${genre} sound`};
+      } else {
+        const j = await api(`/search?type=track&limit=10&offset=${rint(3) * 10}&q=${encodeURIComponent(`artist:"${seed.name}"`)}`);
+        const c = [];
+        (j.tracks?.items || []).forEach(t => { if (!t || !t.artists.some(a => a.id === seed.id)) return;
+          t.artists.forEach(a => { if (a.id !== seed.id && !known.artists.has(a.id) && !block.has(a.id)) c.push(a); }); });
+        if (c.length) return {artist:rpick(c), via:`has worked with ${seed.name}`};
+      }
+    }catch(e){ if (/limiting|session/.test(e.message)) throw e; }
+  }
+  return null;
+}
+async function realize(type, artist, known, nope){
+  if (type === 'artist'){ const it = fromArtist(await api('/artists/' + artist.id)); return nope.has(it.k) ? null : it; }
+  const groups = type === 'album' ? 'album' : 'album,single';
+  const j = await api(`/artists/${artist.id}/albums?include_groups=${groups}&limit=20`);
+  let als = (j.items || []).filter(al => !nope.has('album:' + al.id) && (type !== 'album' || !known.albums.has(al.id)));
+  if (!als.length) return null;
+  const al = rpick(als);
+  if (type === 'album') return fromAlbum(al);
+  const tj = await api(`/albums/${al.id}/tracks?limit=50`);
+  const ts = (tj.items || []).filter(t => !known.tracks.has(t.id) && !nope.has('track:' + t.id) && t.artists.some(a => a.id === artist.id));
+  if (!ts.length) return null;
+  const t = rpick(ts); t.album = al; return fromTrack(t);
+}
+async function spin(){
+  if (st.busy) return;
+  st.busy = true; st.err = null; render();
+  try{
+    const known = await buildKnown();
+    for (const type of ['artist','album','track']) ranks[type].forEach(r => known[type === 'track' ? 'tracks' : type + 's'].add(r.k.split(':')[1]));
+    lists.heard.forEach(k => { const [type, id] = k.split(':'); known[type === 'track' ? 'tracks' : type + 's'].add(id); });
+    const nope = new Set(lists.nope);
+    const blockArtists = new Set(lists.nope.filter(k => k.startsWith('artist:')).map(k => k.slice(7)));
+    const seeds = (await getSeeds()).filter(s => !blockArtists.has(s.id));
+    if (!seeds.length) throw new Error('Rank a few artists, or listen a bit more on Spotify, so there\u2019s something to go on.');
+    const type = st.disc === 'any' ? rpick(['artist','album','track']) : st.disc;
+    for (let attempt = 0; attempt < 5; attempt++){
+      const seed = wpick(seeds);
+      let artist, via;
+      if (type !== 'artist' && Math.random() < 0.35){ artist = {id:seed.id, name:seed.name}; via = null; }
+      else { const c = await findNewArtist(seed, known, blockArtists); if (!c) continue; artist = c.artist; via = c.via; }
+      const item = await realize(type, artist, known, nope);
+      if (!item) continue;
+      const why = via ? `${artist.name} ${via}. Picked because ${seed.why}.` : `Picked because ${seed.why}, and you haven\u2019t played this one yet.`;
+      st.result = {item, why}; return;
+    }
+    throw new Error('Nothing new turned up this time. Spin again, or rank a few more artists to widen the search.');
+  }catch(e){ st.err = e.message; }
+  finally{ st.busy = false; render(); }
+}
+
+/* ---------- data: new releases ---------- */
+async function loadUpdates(force){
+  if (st.updBusy) return;
+  if (!force && st.upd && Date.now() - st.upd.ts < 12 * 3600e3) return;
+  st.updBusy = true; st.updErr = null; render();
+  try{
+    const pri = new Map();
+    const add = (id, name, w) => { const p = pri.get(id); if (!p || p.w < w) pri.set(id, {id, name, w}); };
+    ranks.artist.forEach(r => { const m = meta[r.k]; if (m && TW[r.t] >= 2) add(m.id, m.name, TW[r.t] + 5); });
+    [...ranks.album, ...ranks.track].forEach(r => { const m = meta[r.k]; if (m && TW[r.t] >= 3) (m.artists||[]).forEach(a => add(a.id, a.name, TW[r.t] + 3)); });
+    for (const range of ['short_term','medium_term']){
+      try{ const d = await loadTop(range); d.artists.slice(0, 25).forEach((a, i) => add(a.id, a.name, Math.max(1, 5 - Math.floor(i / 5)))); }catch{}
+    }
+    const artists = [...pri.values()].sort((a, b) => b.w - a.w).slice(0, 35);
+    if (!artists.length) throw new Error('No artists to follow yet. Rank some artists or listen more on Spotify first.');
+    const out = [], got = new Set();
+    await pool(artists, 3, async a => {
+      for (const g of ['album','single']){
+        try{
+          const j = await api(`/artists/${a.id}/albums?include_groups=${g}&limit=4`);
+          (j.items || []).forEach(al => {
+            if (got.has(al.id) || al.release_date_precision !== 'day' || daysAgo(al.release_date) > 31) return;
+            got.add(al.id); out.push({...fromAlbum(al), date:al.release_date, kind:al.album_type === 'single' ? 'Single or EP' : 'Album'});
+          });
+        }catch(e){ if (/limiting|session/.test(e.message)) throw e; }
+      }
+    });
+    out.sort((x, y) => y.date.localeCompare(x.date));
+    st.upd = {ts:Date.now(), n:artists.length, items:out}; LS.set('upd', st.upd);
+  }catch(e){ st.updErr = e.message; }
+  finally{ st.updBusy = false; render(); }
+}
+
+/* ---------- views ---------- */
+function art(it, cls = ''){
+  const round = it.type === 'artist' ? ' round' : '';
+  return it.img ? `<img class="art${round} ${cls}" src="${esc(it.img)}" alt="" loading="lazy">` : `<div class="art ph${round} ${cls}" aria-hidden="true">${esc((it.name || '?')[0])}</div>`;
+}
+function row(it, pos, extra){
+  seen[it.k] = it; const t = tierOf(it.k);
+  return `<li class="row ${pos ? '' : 'nopos'}">${pos ? `<span class="pos">${pos}</span>` : ''}${art(it)}
+    <div><div class="name">${esc(it.name)}</div><div class="sub">${esc(it.sub)}</div>${extra ? `<div class="sub">${esc(extra)}</div>` : ''}</div>
+    <button class="tierbtn" ${t ? `data-t="${t}"` : ''} data-act="open" data-k="${esc(it.k)}" aria-label="${t ? 'Ranked ' + t + ', change rank for' : 'Rank'} ${esc(it.name)}">${t || '+'}</button></li>`;
+}
+function seg(key, opts, cls = ''){
+  return `<div class="seg ${cls}" role="group">${opts.map(([v, l]) => `<button data-act="set" data-key="${key}" data-val="${v}" aria-pressed="${String(st[key]) === v}">${l}</button>`).join('')}</div>`;
+}
+function viewSetup(){
+  const cid = LS.get('cid');
+  const fileWarn = location.protocol === 'file:' ? `<p class="err">This page is open as a file. Spotify can only send you back to a web address, so put it online first (GitHub Pages works).</p>` : '';
+  const authErr = st.authErr ? `<p class="err">${esc(st.authErr)}</p>` : '';
+  if (!cid) return `<section class="wrap">
+    <h1 class="page-title">Your music, ranked by you</h1>
+    <p class="lede">Rotation reads your Spotify listening, lets you rank artists, albums and songs, and finds things you haven\u2019t played yet.</p>
+    ${fileWarn}
+    <ol class="steps">
+      <li>Open <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> and create an app. Your account needs Spotify Premium.</li>
+      <li>Under Redirect URIs, add exactly this address: <code>${esc(REDIRECT)}</code> <button class="linkbtn" data-act="copy">Copy</button></li>
+      <li>Tick Web API, save, and copy the app\u2019s Client ID.</li>
+    </ol>
+    <div class="field"><input id="cid" placeholder="Paste your Client ID" autocomplete="off" spellcheck="false" aria-label="Spotify Client ID"><button class="btn primary" data-act="savecid">Save</button></div>
+  </section>`;
+  return `<section class="wrap">
+    <h1 class="page-title">Your music, ranked by you</h1>
+    <p class="lede">Connect your Spotify account to load your top artists, songs and albums.</p>
+    ${fileWarn}${authErr}
+    <div class="actions"><button class="btn primary" data-act="connect">Connect Spotify</button><button class="btn" data-act="resetcid">Change Client ID</button></div>
+  </section>`;
+}
+function viewTop(){
+  const d = st.top[st.range], type = st.topType;
+  let body;
+  if (st.topErr) body = `<p class="err">${esc(st.topErr)}</p><button class="btn" data-act="retry-top">Try again</button>`;
+  else if (!d) body = `<p class="muted">Loading your top ${NOUN[type]}s\u2026</p>`;
+  else {
+    const list = d[type + 's'];
+    body = list.length ? `<ol class="list">${list.map((it, i) => row(it, i + 1, it.extra)).join('')}</ol>`
+      : `<p class="muted">Spotify doesn\u2019t have enough listening for this period yet. Try a longer range.</p>`;
+  }
+  return `<section class="wrap">
+    <h1 class="page-title">Your top</h1>
+    <p class="lede">What you play most. Tap + on anything to rank it.</p>
+    ${seg('topType', [['artist','Artists'],['track','Songs'],['album','Albums']])}
+    ${seg('range', [['short_term','4 weeks'],['medium_term','6 months'],['long_term','1 year']], 'small')}
+    ${type === 'album' ? '<p class="note">Spotify doesn\u2019t report top albums, so these are built from your top 50 songs.</p>' : ''}
+    ${body}</section>`;
+}
+function viewRank(){
+  const type = st.rankType, arr = ranks[type];
+  const sr = st.search && st.search.type === type ? st.search : null;
+  const results = sr ? (sr.err ? `<p class="err">${esc(sr.err)}</p>` : sr.items.length ? `<ul class="list results">${sr.items.map(it => row(it)).join('')}</ul>` : `<p class="muted">No matches.</p>`) : '';
+  const tiers = TIERS.map(t => {
+    const its = arr.filter(r => r.t === t).map(r => meta[r.k]).filter(Boolean);
+    return `<div class="tier"><div class="lab t-${t}">${t}</div><div class="cells">${its.length
+      ? its.map(it => { seen[it.k] = it; return `<button class="cell" data-act="open" data-k="${esc(it.k)}" aria-label="${esc(it.name)}, tier ${t}">${art(it)}<span>${esc(it.name)}</span></button>`; }).join('')
+      : '<span class="empty-cell">Nothing here yet</span>'}</div></div>`;
+  }).join('');
+  return `<section class="wrap">
+    <h1 class="page-title">Rankings</h1>
+    <p class="lede">S is your all-time best, D is your least favorite. Tap anything to move it.</p>
+    ${seg('rankType', [['artist','Artists'],['album','Albums'],['track','Songs']])}
+    <form id="sform" class="search"><input id="q" type="search" value="${esc(st.q)}" placeholder="Find ${type === 'album' ? 'an' : 'a'} ${NOUN[type]} to rank" aria-label="Search Spotify"><button class="btn">Search</button></form>
+    ${results}${tiers}</section>`;
+}
+function viewDisc(){
+  const r = st.result, img = r && r.item.img;
+  const kind = r ? {track:'A song for you', album:'An album for you', artist:'An artist for you'}[r.item.type] : '';
+  if (r) seen[r.item.k] = r.item;
+  return `<section class="wrap">
+    <h1 class="page-title">Discover</h1>
+    <p class="lede">Spin for something you haven\u2019t played, picked from what you rank highest.</p>
+    ${seg('disc', [['any','Surprise me'],['track','Song'],['album','Album'],['artist','Artist']])}
+    <div class="deck"><button class="record ${st.busy ? 'spinning' : ''}" data-act="spin" aria-label="Spin for a new pick" ${st.busy ? 'aria-busy="true"' : ''}>
+      <span class="label ${img && !st.busy ? 'img' : ''}" style="${img && !st.busy ? `background-image:url(${esc(img)})` : ''}">${img && !st.busy ? '' : (st.busy ? '' : 'Spin')}</span></button></div>
+    ${st.err ? `<p class="err">${esc(st.err)}</p>` : ''}
+    ${r && !st.busy ? `<div class="result">
+      <p class="kind">${kind}</p><h2>${esc(r.item.name)}</h2><div class="sub">${esc(r.item.sub)}</div>
+      <p class="why">${esc(r.why)}</p>
+      <div class="actions">
+        ${r.item.url ? `<a class="btn primary" href="${esc(r.item.url)}" target="_blank" rel="noopener">Play on Spotify</a>` : ''}
+        <button class="btn" data-act="open" data-k="${esc(r.item.k)}">Rank it</button>
+        <button class="btn" data-act="heard">I\u2019ve heard it</button>
+        <button class="btn" data-act="nope">Not for me</button>
+      </div></div>` : ''}
+  </section>`;
+}
+function viewUpd(){
+  const u = st.upd, days = Number(st.days);
+  let body;
+  if (st.updBusy) body = `<p class="muted">Checking new releases from the artists you like\u2026 this takes a few seconds.</p>`;
+  else if (st.updErr) body = `<p class="err">${esc(st.updErr)}</p><button class="btn" data-act="refresh-upd">Try again</button>`;
+  else if (!u) body = `<p class="muted">Loading\u2026</p>`;
+  else {
+    const items = u.items.filter(x => daysAgo(x.date) <= days);
+    body = items.length ? `<ul class="list">${items.map(it => row(it, 0, `${it.kind}, out ${fmtDate(it.date)}`)).join('')}</ul>`
+      : `<p class="muted">Nothing new from your artists in the last ${days} days. Switch to This month, or rank more artists so there\u2019s more to follow.</p>`;
+    const mins = Math.round((Date.now() - u.ts) / 60000);
+    body += `<div class="foot"><span>Checked ${u.n} artists ${mins < 60 ? mins + ' min' : Math.round(mins / 60) + ' h'} ago</span><button class="btn" data-act="refresh-upd">Refresh</button></div>`;
+  }
+  return `<section class="wrap">
+    <h1 class="page-title">New for you</h1>
+    <p class="lede">Fresh releases from the artists you rank highest and play most.</p>
+    ${seg('days', [['7','This week'],['30','This month']])}
+    ${body}</section>`;
+}
+function renderSheet(){
+  const el = $('#sheet');
+  const it = st.sheet && itemOf(st.sheet);
+  if (!it){ el.hidden = true; el.innerHTML = ''; return; }
+  const cur = tierOf(it.k);
+  el.hidden = false;
+  el.innerHTML = `<div class="scrim" data-act="close"></div>
+  <div class="panel" role="dialog" aria-modal="true" aria-label="Rank ${esc(it.name)}">
+    <div class="sh-head">${art(it)}<div><div class="name">${esc(it.name)}</div><div class="sub">${esc(it.sub)}</div></div></div>
+    <div class="tierpick">${TIERS.map(t => `<button class="tp t-${t}" data-act="pick" data-t="${t}" aria-pressed="${cur === t}">${t}</button>`).join('')}</div>
+    ${cur ? `<div class="sh-row"><button class="btn" data-act="move" data-dir="-1">Move up within ${cur}</button><button class="btn" data-act="move" data-dir="1">Move down</button></div>` : ''}
+    <div class="sh-row">${it.url ? `<a class="btn primary" href="${esc(it.url)}" target="_blank" rel="noopener">Open in Spotify</a>` : ''}
+      ${cur ? '<button class="btn" data-act="unrank">Remove ranking</button>' : ''}<button class="btn" data-act="close">Done</button></div>
+  </div>`;
+}
+function render(){
+  const connected = !!LS.get('cid') && !!LS.get('tok');
+  $('#nav').hidden = !connected; $('#signout').hidden = !connected;
+  if (!connected){ $('#app').innerHTML = viewSetup(); renderSheet(); return; }
+  document.querySelectorAll('#nav button').forEach(b => b.dataset.tab === st.tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  $('#app').innerHTML = ({top:viewTop, rank:viewRank, discover:viewDisc, updates:viewUpd}[st.tab] || viewTop)();
+  renderSheet();
+  if (st.tab === 'top' && !st.top[st.range] && !st.topBusy && !st.topErr) fetchTop();
+  if (st.tab === 'updates' && !st.updBusy && !st.updErr && (!st.upd || Date.now() - st.upd.ts > 12 * 3600e3)) loadUpdates();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a === 'tab'){ st.tab = b.dataset.tab; LS.set('tab', st.tab); st.sheet = null; render(); window.scrollTo(0, 0); }
+  else if (a === 'set'){ st[b.dataset.key] = b.dataset.val; if (b.dataset.key === 'range') st.topErr = null; render(); }
+  else if (a === 'open'){ st.sheet = b.dataset.k; renderSheet(); }
+  else if (a === 'close'){ st.sheet = null; renderSheet(); }
+  else if (a === 'pick'){ const t = b.dataset.t; setTier(itemOf(st.sheet), t); st.sheet = null; render(); toast('Ranked ' + t); }
+  else if (a === 'unrank'){ setTier(itemOf(st.sheet), null); st.sheet = null; render(); toast('Ranking removed'); }
+  else if (a === 'move'){ moveInTier(st.sheet, Number(b.dataset.dir)); render(); }
+  else if (a === 'spin') spin();
+  else if (a === 'heard' || a === 'nope'){
+    const it = st.result && st.result.item; if (!it) return;
+    lists[a].push(it.k); LS.set('lists', lists); remember(it);
+    toast(a === 'heard' ? 'Got it, skipping that one' : 'Won\u2019t suggest that again'); spin();
+  }
+  else if (a === 'connect') login();
+  else if (a === 'savecid'){
+    const v = ($('#cid').value || '').trim();
+    if (!/^[0-9a-f]{32}$/i.test(v)){ toast('A Client ID is 32 letters and numbers. Check it and try again.'); return; }
+    LS.set('cid', v); render();
+  }
+  else if (a === 'resetcid'){ LS.del('cid'); render(); }
+  else if (a === 'copy'){ navigator.clipboard?.writeText(REDIRECT).then(() => toast('Copied'), () => toast('Couldn\u2019t copy. Select it instead.')); }
+  else if (a === 'signout'){ ['tok','known','upd','top_short_term','top_medium_term','top_long_term'].forEach(LS.del); st.top = {}; st.upd = null; st.result = null; render(); toast('Disconnected. Your rankings stay saved on this phone.'); }
+  else if (a === 'retry-top'){ st.topErr = null; render(); }
+  else if (a === 'refresh-upd'){ st.updErr = null; loadUpdates(true); }
+});
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'sform') return;
+  e.preventDefault();
+  const q = $('#q').value.trim(); st.q = q; if (!q) return;
+  const type = st.rankType;
+  try{
+    const j = await api(`/search?type=${type}&limit=10&q=${encodeURIComponent(q)}`);
+    const f = {artist:fromArtist, album:fromAlbum, track:fromTrack}[type];
+    st.search = {type, items:(j[type + 's']?.items || []).filter(Boolean).map(f)};
+  }catch(err){ st.search = {type, items:[], err:err.message}; }
+  render();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.sheet){ st.sheet = null; renderSheet(); } });
+
+(async () => { try{ await handleCallback(); }catch(e){ st.authErr = e.message; } render(); })();
+</script>
+</body>
+</html>
