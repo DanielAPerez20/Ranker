@@ -120,7 +120,7 @@ nav button[aria-current=page]{color:var(--accent)}
 </head>
 <body>
 <header class="top">
-  <span class="brand">Rotation</span>
+  <span class="brand">Rotation <small style="font:500 12px Figtree,sans-serif;color:var(--muted)">v3</small></span>
   <button class="linkbtn" id="signout" data-act="signout" hidden>Disconnect</button>
 </header>
 <main id="app"></main>
@@ -227,7 +227,12 @@ async function getToken(){
   })().finally(() => { refreshing = null; });
   return refreshing;
 }
+// Spotify keeps lowering per-request limits without notice, so learn each endpoint's cap and remember it.
+const LIMIT_CAP = LS.get('caps', {});
+const epKey = p => p.split('?')[0].replace(/\/[A-Za-z0-9]{22}(?=\/|$)/g, '/{id}');
 async function api(path, retry = true){
+  const cap = LIMIT_CAP[epKey(path)];
+  if (cap) path = path.replace(/([?&])limit=(\d+)/, (all, sep, n) => `${sep}limit=${Math.min(Number(n), cap)}`);
   const tk = await getToken();
   if (!tk){ render(); throw new Error('Your Spotify session ended. Connect again.'); }
   const r = await fetch(API + path, {headers:{Authorization:'Bearer ' + tk}});
@@ -235,6 +240,17 @@ async function api(path, retry = true){
   if (r.status === 429){ if (retry){ await sleep(4000); return api(path, false); } throw new Error('Spotify is limiting requests right now. Wait a minute and try again.'); }
   if (r.status === 401){ if (retry){ const t = LS.get('tok'); if (t){ t.exp = 0; LS.set('tok', t); } return api(path, false); } LS.del('tok'); render(); throw new Error('Your Spotify session ended. Connect again.'); }
   if (r.status === 403) throw new Error('Spotify refused ' + ep + '. In your Spotify developer app, add your account under User Management.');
+  if (r.status === 400){
+    const body = await r.json().catch(() => ({}));
+    const msg = body?.error?.message || '';
+    const m = path.match(/([?&])limit=(\d+)/);
+    if (m && Number(m[2]) > 1){
+      const smaller = Math.max(1, Math.floor(Number(m[2]) / 2));
+      LIMIT_CAP[epKey(path)] = smaller; LS.set('caps', LIMIT_CAP);
+      return api(path.replace(/([?&])limit=\d+/, `$1limit=${smaller}`), retry);
+    }
+    throw new Error('Spotify returned 400 for ' + ep + (msg ? ': ' + msg : '.'));
+  }
   if (!r.ok) throw new Error('Spotify returned ' + r.status + ' for ' + ep + '.');
   return r.status === 204 ? null : r.json();
 }
