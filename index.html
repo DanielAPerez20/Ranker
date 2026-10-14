@@ -40,6 +40,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;max-wid
 .note{color:var(--muted);font-size:14px;margin:-4px 0 12px}
 .muted{color:var(--muted)}
 .err{color:var(--err);font-weight:500}
+a{color:var(--accent)}
 .seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;margin:0 0 10px}
 .seg button{flex:1;border:0;background:none;color:var(--muted);font-weight:600;font-size:14px;padding:9px 6px;border-radius:999px;cursor:pointer}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
@@ -116,11 +117,21 @@ nav button[aria-current=page]{color:var(--accent)}
 #toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 @media (prefers-reduced-motion:reduce){.record.spinning,.panel{animation:none}#toast{transition:none}}
+.hours{display:flex;align-items:baseline;gap:10px;margin:6px 0 0}
+.hours .big{font:800 clamp(72px,24vw,112px)/.9 "Bricolage Grotesque",sans-serif;letter-spacing:-.055em}
+.hours .unit{font:600 20px "Bricolage Grotesque",sans-serif;color:var(--muted)}
+.counts{color:var(--muted);margin:8px 0 4px}
+.h2{font-size:22px;letter-spacing:-.02em;margin:26px 0 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin:30px 0}
+.card h2{font-size:22px;letter-spacing:-.02em;margin-bottom:8px}
+.card .steps{margin:10px 0 14px}
+.filepick{position:relative}
+.filepick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
 </style>
 </head>
 <body>
 <header class="top">
-  <span class="brand">Rotation <small style="font:500 12px Figtree,sans-serif;color:var(--muted)">v3</small></span>
+  <span class="brand">Rotation <small style="font:500 12px Figtree,sans-serif;color:var(--muted)">v5</small></span>
   <button class="linkbtn" id="signout" data-act="signout" hidden>Disconnect</button>
 </header>
 <main id="app"></main>
@@ -129,6 +140,7 @@ nav button[aria-current=page]{color:var(--accent)}
   <button data-act="tab" data-tab="rank"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="13" height="4" rx="1"/><rect x="3" y="16" width="8" height="4" rx="1"/></svg>Rank</button>
   <button data-act="tab" data-tab="discover"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>Discover</button>
   <button data-act="tab" data-tab="updates"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/></svg>New</button>
+  <button data-act="tab" data-tab="stats"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>Stats</button>
 </nav>
 <div id="sheet" hidden></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -161,7 +173,7 @@ const TW = {S:5, A:4, B:3, C:2, D:0};
 const NOUN = {artist:'artist', album:'album', track:'song'};
 const st = { tab: LS.get('tab','top'), topType:'artist', range:'medium_term', rankType:'artist', disc:'any', days:'7',
   top:{}, topBusy:false, topErr:null, busy:false, err:null, result:null, upd:LS.get('upd',null), updBusy:false, updErr:null,
-  sheet:null, search:null, q:'' };
+  sheet:null, search:null, q:'', statRange:'7', plReady:false, polling:false, importMsg:null, resolving:false };
 let meta = LS.get('meta', {});
 let ranks = LS.get('ranks', {artist:[], album:[], track:[]});
 let lists = LS.get('lists', {heard:[], nope:[]});
@@ -271,11 +283,119 @@ async function loadTop(range){
   st.top[range] = d; LS.set('top_' + range, {ts:Date.now(), d});
   return d;
 }
-async function fetchTop(){
+async function fetchTop(range = st.range){
   st.topBusy = true;
-  try{ await loadTop(st.range); }catch(e){ st.topErr = e.message; }
+  try{ await loadTop(range); }catch(e){ st.topErr = e.message; }
   finally{ st.topBusy = false; render(); }
 }
+
+/* ---------- data: listening stats ---------- */
+// Plays are kept on this phone: [time ms, ms played, song, artists, track id, image, first artist id, source L=live I=imported]
+const IDB = {
+  conn: null,
+  open(){ return this.conn ||= new Promise((res, rej) => { const r = indexedDB.open('rotation', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async get(k){ const d = await this.open(); return new Promise(res => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); },
+  async set(k, v){ const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); }
+};
+let PL = null, PKEYS = null;
+const TM = LS.get('tmatch', {});
+const pkey = (t, n) => Math.floor(t / 60000) + '|' + String(n).toLowerCase();
+let plLoading = null;
+function loadPlays(){
+  if (PL) return Promise.resolve(PL);
+  return plLoading ||= (async () => {
+    let v; try{ v = await IDB.get('plays'); }catch{}
+    PL = v || []; PKEYS = new Set(PL.map(p => pkey(p[0], p[2])));
+    st.plReady = true; return PL;
+  })();
+}
+async function addPlays(rows){
+  await loadPlays();
+  let added = 0;
+  for (const r of rows){
+    if (!r[0] || isNaN(r[0]) || !r[2]) continue;
+    const m = Math.floor(r[0] / 60000), n = String(r[2]).toLowerCase();
+    if (PKEYS.has(m + '|' + n) || PKEYS.has((m - 1) + '|' + n) || PKEYS.has((m + 1) + '|' + n)) continue;
+    PKEYS.add(m + '|' + n); PL.push(r); added++;
+  }
+  if (added){ PL.sort((a, b) => a[0] - b[0]); await IDB.set('plays', PL); }
+  return added;
+}
+async function pollRecent(){
+  if (st.polling || Date.now() - LS.get('lastPoll', 0) < 5 * 60e3) return;
+  st.polling = true;
+  try{
+    await loadPlays();
+    const last = LS.get('lastLog', 0);
+    const j = await api('/me/player/recently-played?limit=50' + (last ? '&after=' + last : ''));
+    const rows = (j.items || []).filter(x => x.track).map(x => [Date.parse(x.played_at), x.track.duration_ms || 0, x.track.name,
+      x.track.artists.map(a => a.name).join(', '), x.track.id, pickImg(x.track.album?.images), x.track.artists[0]?.id || '', 'L']);
+    if (rows.length){ await addPlays(rows); LS.set('lastLog', Math.max(last, ...rows.map(r => r[0]))); }
+    if (!LS.get('trackSince')) LS.set('trackSince', rows.length ? Math.min(...rows.map(r => r[0])) : Date.now());
+  }catch(e){ console.warn(e); }
+  finally{ LS.set('lastPoll', Date.now()); st.polling = false; if (st.tab === 'stats') render(); }
+}
+async function importFiles(files){
+  const rows = []; let used = 0;
+  for (const f of files){
+    if (!/\.json$/i.test(f.name) || /podcast|video/i.test(f.name)) continue;
+    let data; try{ data = JSON.parse(await f.text()); }catch{ continue; }
+    if (!Array.isArray(data)) continue;
+    let n = 0;
+    for (const x of data){
+      if (x && x.master_metadata_track_name){
+        rows.push([Date.parse(x.ts), x.ms_played || 0, x.master_metadata_track_name, x.master_metadata_album_artist_name || '', (x.spotify_track_uri || '').split(':')[2] || '', '', '', 'I']); n++;
+      } else if (x && x.trackName && x.endTime){
+        rows.push([Date.parse(x.endTime.replace(' ', 'T') + 'Z'), x.msPlayed || 0, x.trackName, x.artistName || '', '', '', '', 'I']); n++;
+      }
+    }
+    if (n) used++;
+  }
+  if (!rows.length) throw new Error('No listening history found. Pick the files named StreamingHistory_music or Streaming_History_Audio.');
+  await loadPlays();
+  const lo = Math.min(...rows.map(r => r[0])), hi = Math.max(...rows.map(r => r[0]));
+  // Spotify's own history is exact, so it replaces what Rotation tracked over the same dates.
+  PL = PL.filter(p => !(p[7] === 'L' && p[0] >= lo && p[0] <= hi));
+  PKEYS = new Set(PL.map(p => pkey(p[0], p[2])));
+  const added = await addPlays(rows);
+  await IDB.set('plays', PL);
+  return {added, files:used, from:lo};
+}
+function statsFor(days){
+  const from = Date.now() - days * 864e5;
+  let ms = 0, plays = 0; const by = new Map();
+  for (const p of PL || []){
+    if (p[0] < from) continue;
+    ms += p[1];
+    if (p[1] < 30000) continue;
+    plays++;
+    const k = (p[2] + '|' + p[3]).toLowerCase();
+    let e = by.get(k);
+    if (!e){ e = {n:p[2], a:p[3], id:p[4], img:p[5], aid:p[6], c:0, ms:0}; by.set(k, e); }
+    e.c++; e.ms += p[1]; e.id ||= p[4]; e.img ||= p[5]; e.aid ||= p[6];
+  }
+  const top = [...by.values()].sort((x, y) => y.c - x.c || y.ms - x.ms).slice(0, 25);
+  return {ms, plays, songs:by.size, top};
+}
+async function resolveArt(entries){
+  const todo = entries.filter(e => !e.img && !(((e.n + '|' + e.a).toLowerCase()) in TM));
+  if (!todo.length || st.resolving) return;
+  st.resolving = true;
+  try{
+    await pool(todo, 2, async e => {
+      const k = (e.n + '|' + e.a).toLowerCase();
+      try{
+        let t;
+        if (e.id) t = await api('/tracks/' + e.id);
+        else { const clean = s => s.replace(/"/g, ''); const j = await api(`/search?type=track&limit=1&q=${encodeURIComponent(`track:"${clean(e.n)}" artist:"${clean(e.a.split(',')[0])}"`)}`); t = j.tracks?.items?.[0]; }
+        TM[k] = t ? {id:t.id, img:pickImg(t.album?.images), artists:t.artists.map(a => ({id:a.id, name:a.name}))} : null;
+      }catch(err){ if (/limiting|session/.test(err.message)) throw err; TM[k] = null; }
+    });
+  }catch{}
+  finally{ LS.set('tmatch', TM); st.resolving = false; if (st.tab === 'stats') render(); }
+}
+const fmtDur = ms => { const h = ms / 36e5; return h >= 1 ? (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h' : Math.round(ms / 60000) + ' min'; };
+const fmtDay = t => new Date(t).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
 
 /* ---------- data: discover ---------- */
 async function buildKnown(){
@@ -477,7 +597,7 @@ function viewRank(){
     <h1 class="page-title">Rankings</h1>
     <p class="lede">S is your all-time best, D is your least favorite. Tap anything to move it.</p>
     ${seg('rankType', [['artist','Artists'],['album','Albums'],['track','Songs']])}
-    <form id="sform" class="search"><input id="q" type="search" value="${esc(st.q)}" placeholder="Find ${type === 'album' ? 'an' : 'a'} ${NOUN[type]} to rank" aria-label="Search Spotify"><button class="btn">Search</button></form>
+    <form id="sform" class="search"><input id="q" type="search" value="${esc(st.q)}" placeholder="Find ${type === 'track' ? 'a' : 'an'} ${NOUN[type]} to rank" aria-label="Search Spotify"><button class="btn">Search</button></form>
     ${results}${tiers}</section>`;
 }
 function viewDisc(){
@@ -500,6 +620,60 @@ function viewDisc(){
         <button class="btn" data-act="heard">I\u2019ve heard it</button>
         <button class="btn" data-act="nope">Not for me</button>
       </div></div>` : ''}
+  </section>`;
+}
+function statRow(e, pos){
+  const m = TM[(e.n + '|' + e.a).toLowerCase()];
+  const id = e.id || m?.id, img = e.img || m?.img;
+  const extra = `${e.c} play${e.c === 1 ? '' : 's'}, ${fmtDur(e.ms)}`;
+  if (id) return row({type:'track', id, k:'track:' + id, name:e.n, sub:e.a, img, url:'https://open.spotify.com/track/' + id,
+    artists:m?.artists || (e.aid ? [{id:e.aid, name:e.a.split(', ')[0]}] : [])}, pos, extra);
+  return `<li class="row"><span class="pos">${pos}</span>${art({type:'track', name:e.n, img})}<div><div class="name">${esc(e.n)}</div><div class="sub">${esc(e.a)}</div><div class="sub">${extra}</div></div><span></span></li>`;
+}
+function viewStats(){
+  const days = Number(st.statRange), word = {7:'week', 30:'month', 365:'year'}[days];
+  const head = `<h1 class="page-title">Your listening</h1>
+    <p class="lede">How much you\u2019ve played on Spotify, and the songs you\u2019ve played most.</p>
+    ${seg('statRange', [['7','Past week'],['30','Past month'],['365','Past year']])}`;
+  if (!st.plReady) return `<section class="wrap">${head}<p class="muted">Loading\u2026</p></section>`;
+  const s = statsFor(days);
+  const first = PL.length ? PL[0][0] : null;
+  const covered = first && first <= Date.now() - days * 864e5;
+  const h = s.ms / 36e5;
+  const big = h >= 10 ? Math.round(h).toLocaleString() : h.toFixed(1);
+  let cov = '';
+  if (!PL.length) cov = `Rotation started counting today. Your hours build up as you listen, or import your Spotify history below to fill in the whole year right away.`;
+  else if (!covered) cov = `Counting since ${fmtDay(first)}, so this is lower than your real ${word}. Import your Spotify history below to fill it in.`;
+  let list;
+  if (s.top.length && (covered || days === 7)){
+    list = `<ol class="list">${s.top.map((e, i) => statRow(e, i + 1)).join('')}</ol>`;
+    resolveArt(s.top);
+  } else if (days === 7){
+    list = `<p class="muted">No plays counted this week yet. Listen on Spotify, then come back.</p>`;
+  } else {
+    const range = days === 30 ? 'short_term' : 'long_term', d = st.top[range];
+    if (!d && !st.topBusy && !st.topErr) fetchTop(range);
+    list = d ? `<p class="note">Until Rotation has a full ${word} of plays, this list is Spotify\u2019s own ranking for the past ${days === 30 ? '4 weeks' : 'year'}, without play counts.</p><ol class="list">${d.tracks.slice(0, 25).map((it, i) => row(it, i + 1)).join('')}</ol>`
+      : st.topErr ? `<p class="err">${esc(st.topErr)}</p>` : `<p class="muted">Loading\u2026</p>`;
+  }
+  return `<section class="wrap">${head}
+    <div class="hours"><span class="big">${big}</span><span class="unit">hours</span></div>
+    <p class="counts">${s.plays.toLocaleString()} plays of ${s.songs.toLocaleString()} different songs in the past ${word}</p>
+    ${cov ? `<p class="note" style="margin-top:6px">${cov}</p>` : ''}
+    <h2 class="h2">Most played songs</h2>
+    ${list}
+    <div class="card">
+      <h2>Fill in your full history</h2>
+      <p class="muted" style="margin:0">Spotify only shares your last 50 plays with apps, so Rotation counts from the day you start using it. Spotify will email you your real history if you ask:</p>
+      <ol class="steps">
+        <li>Go to <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a>, tick Account data, and request it. It arrives by email in about 5 days.</li>
+        <li>Download the zip from the email and open it to unzip it.</li>
+        <li>Tap Import below and choose every file named StreamingHistory_music.</li>
+      </ol>
+      <label class="btn primary filepick">Import history<input id="histfile" type="file" accept=".json,application/json" multiple></label>
+      ${st.importMsg ? `<p class="${st.importMsg.err ? 'err' : 'muted'}" style="margin:12px 0 0">${esc(st.importMsg.text)}</p>` : ''}
+      <p class="note" style="margin:12px 0 0">Between imports, open Rotation at least every few hours of listening so no plays are missed.</p>
+    </div>
   </section>`;
 }
 function viewUpd(){
@@ -541,9 +715,11 @@ function render(){
   $('#nav').hidden = !connected; $('#signout').hidden = !connected;
   if (!connected){ $('#app').innerHTML = viewSetup(); renderSheet(); return; }
   document.querySelectorAll('#nav button').forEach(b => b.dataset.tab === st.tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
-  $('#app').innerHTML = ({top:viewTop, rank:viewRank, discover:viewDisc, updates:viewUpd}[st.tab] || viewTop)();
+  $('#app').innerHTML = ({top:viewTop, rank:viewRank, discover:viewDisc, updates:viewUpd, stats:viewStats}[st.tab] || viewTop)();
   renderSheet();
   if (st.tab === 'top' && !st.top[st.range] && !st.topBusy && !st.topErr) fetchTop();
+  pollRecent();
+  if (st.tab === 'stats' && !st.plReady) loadPlays().then(render);
   if (st.tab === 'updates' && !st.updBusy && !st.updErr && (!st.upd || Date.now() - st.upd.ts > 12 * 3600e3)) loadUpdates();
 }
 
@@ -572,7 +748,7 @@ document.addEventListener('click', e => {
   }
   else if (a === 'resetcid'){ LS.del('cid'); render(); }
   else if (a === 'copy'){ navigator.clipboard?.writeText(REDIRECT).then(() => toast('Copied'), () => toast('Couldn\u2019t copy. Select it instead.')); }
-  else if (a === 'signout'){ ['tok','known','upd','top_short_term','top_medium_term','top_long_term'].forEach(LS.del); st.top = {}; st.upd = null; st.result = null; render(); toast('Disconnected. Your rankings stay saved on this phone.'); }
+  else if (a === 'signout'){ ['tok','known','upd','lastPoll','top_short_term','top_medium_term','top_long_term'].forEach(LS.del); st.top = {}; st.upd = null; st.result = null; render(); toast('Disconnected. Your rankings stay saved on this phone.'); }
   else if (a === 'retry-top'){ st.topErr = null; render(); }
   else if (a === 'refresh-upd'){ st.updErr = null; loadUpdates(true); }
 });
@@ -586,6 +762,15 @@ document.addEventListener('submit', async e => {
     const f = {artist:fromArtist, album:fromAlbum, track:fromTrack}[type];
     st.search = {type, items:(j[type + 's']?.items || []).filter(Boolean).map(f)};
   }catch(err){ st.search = {type, items:[], err:err.message}; }
+  render();
+});
+document.addEventListener('change', async e => {
+  if (e.target.id !== 'histfile' || !e.target.files.length) return;
+  st.importMsg = {text:'Reading your history\u2026'}; render();
+  try{
+    const r = await importFiles([...e.target.files]);
+    st.importMsg = {text:`Added ${r.added.toLocaleString()} plays from ${r.files} file${r.files === 1 ? '' : 's'}, going back to ${fmtDay(r.from)}.`};
+  }catch(err){ st.importMsg = {text:err.message, err:true}; }
   render();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.sheet){ st.sheet = null; renderSheet(); } });
