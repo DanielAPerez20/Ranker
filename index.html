@@ -131,7 +131,7 @@ nav button[aria-current=page]{color:var(--accent)}
 </head>
 <body>
 <header class="top">
-  <span class="brand">Rotation <small style="font:500 12px Figtree,sans-serif;color:var(--muted)">v6</small></span>
+  <span class="brand">Rotation <small style="font:500 12px Figtree,sans-serif;color:var(--muted)">v7</small></span>
   <button class="linkbtn" id="signout" data-act="signout" hidden>Disconnect</button>
 </header>
 <main id="app"></main>
@@ -183,7 +183,7 @@ const itemOf = k => seen[k] || meta[k];
 /* ---------- item shapes ---------- */
 const pickImg = im => (im && im.length) ? (im[1] || im[0]).url : '';
 function fromArtist(a){ return {type:'artist', id:a.id, k:'artist:'+a.id, name:a.name, sub:(a.genres||[]).slice(0,2).join(', ') || 'Artist', img:pickImg(a.images), url:a.external_urls?.spotify, genres:a.genres||[]}; }
-function fromTrack(t){ return {type:'track', id:t.id, k:'track:'+t.id, name:t.name, sub:t.artists.map(a=>a.name).join(', '), img:pickImg(t.album?.images), url:t.external_urls?.spotify, artists:t.artists.map(a=>({id:a.id, name:a.name}))}; }
+function fromTrack(t){ return {type:'track', id:t.id, k:'track:'+t.id, name:t.name, sub:t.artists.map(a=>a.name).join(', '), img:pickImg(t.album?.images), url:t.external_urls?.spotify, artists:t.artists.map(a=>({id:a.id, name:a.name})), albumId:t.album?.id}; }
 function fromAlbum(al){ const y = (al.release_date||'').slice(0,4); return {type:'album', id:al.id, k:'album:'+al.id, name:al.name, sub:al.artists.map(a=>a.name).join(', ') + (y ? ', '+y : ''), img:pickImg(al.images), url:al.external_urls?.spotify, artists:al.artists.map(a=>({id:a.id, name:a.name}))}; }
 
 /* ---------- rankings ---------- */
@@ -242,15 +242,44 @@ async function getToken(){
 // Spotify keeps lowering per-request limits without notice, so learn each endpoint's cap and remember it.
 const LIMIT_CAP = LS.get('caps', {});
 const epKey = p => p.split('?')[0].replace(/\/[A-Za-z0-9]{22}(?=\/|$)/g, '/{id}');
-async function api(path, retry = true){
+// Spotify allows only a few requests per second per developer account, so requests go out
+// two at a time with a short gap, and everyone pauses together when Spotify says to slow down.
+let inflight = 0, lastAt = 0, coolUntil = 0; const waiters = [];
+async function slot(){
+  while (inflight >= 2) await new Promise(r => waiters.push(r));
+  inflight++;
+  const wait = Math.max(0, lastAt + 180 - Date.now(), coolUntil - Date.now());
+  lastAt = Date.now() + wait;
+  if (wait) await sleep(wait);
+}
+function release(){ inflight--; const w = waiters.shift(); if (w) w(); }
+// Catalog data (artists, albums, searches) barely changes, so keep it on the phone instead of asking again.
+async function capi(path, hours = 24){
+  const key = 'c:' + path;
+  try{ const c = await IDB.get(key); if (c && Date.now() - c.t < hours * 3600e3) return c.v; }catch{}
+  const v = await api(path);
+  IDB.set(key, {t:Date.now(), v}).catch(() => {});
+  return v;
+}
+async function api(path, retry = true, tries = 0){
   const cap = LIMIT_CAP[epKey(path)];
   if (cap) path = path.replace(/([?&])limit=(\d+)/, (all, sep, n) => `${sep}limit=${Math.min(Number(n), cap)}`);
   const tk = await getToken();
   if (!tk){ render(); throw new Error('Your Spotify session ended. Connect again.'); }
-  const r = await fetch(API + path, {headers:{Authorization:'Bearer ' + tk}});
+  await slot();
+  let r;
+  try{ r = await fetch(API + path, {headers:{Authorization:'Bearer ' + tk}}); }
+  finally{ release(); }
   const ep = path.split('?')[0];
-  if (r.status === 429){ if (retry){ await sleep(4000); return api(path, false); } throw new Error('Spotify is limiting requests right now. Wait a minute and try again.'); }
-  if (r.status === 401){ if (retry){ const t = LS.get('tok'); if (t){ t.exp = 0; LS.set('tok', t); } return api(path, false); } LS.del('tok'); render(); throw new Error('Your Spotify session ended. Connect again.'); }
+  if (r.status === 429){
+    const body = await r.json().catch(() => ({}));
+    if (body?.error?.reason === 'QUOTA_EXCEEDED'){ coolUntil = Date.now() + 60e3; throw new Error('Spotify is limiting this app: it has used up its request allowance for now. Give it a while (try again in an hour) and it resets on its own.'); }
+    const secs = Number(r.headers.get('Retry-After')) || 5 * (tries + 1);
+    coolUntil = Math.max(coolUntil, Date.now() + secs * 1000);
+    if (tries < 2 && secs <= 30){ await sleep(secs * 1000); return api(path, retry, tries + 1); }
+    throw new Error('Spotify is limiting requests right now. Wait a minute and try again.');
+  }
+  if (r.status === 401){ if (retry){ const t = LS.get('tok'); if (t){ t.exp = 0; LS.set('tok', t); } return api(path, false, tries); } LS.del('tok'); render(); throw new Error('Your Spotify session ended. Connect again.'); }
   if (r.status === 403) throw new Error('Spotify refused ' + ep + '. In your Spotify developer app, add your account under User Management.');
   if (r.status === 400){
     const body = await r.json().catch(() => ({}));
@@ -259,7 +288,7 @@ async function api(path, retry = true){
     if (m && Number(m[2]) > 1){
       const smaller = Math.max(1, Math.floor(Number(m[2]) / 2));
       LIMIT_CAP[epKey(path)] = smaller; LS.set('caps', LIMIT_CAP);
-      return api(path.replace(/([?&])limit=\d+/, `$1limit=${smaller}`), retry);
+      return api(path.replace(/([?&])limit=\d+/, `$1limit=${smaller}`), retry, tries);
     }
     throw new Error('Spotify returned 400 for ' + ep + (msg ? ': ' + msg : '.'));
   }
@@ -400,19 +429,18 @@ const fmtDay = t => new Date(t).toLocaleDateString(undefined, {month:'short', da
 /* ---------- data: discover ---------- */
 async function buildKnown(){
   const k = LS.get('known');
-  if (k && Date.now() - k.ts < 6 * 3600e3) return {artists:new Set(k.a), tracks:new Set(k.t), albums:new Set(k.al)};
+  if (k && Date.now() - k.ts < 12 * 3600e3) return {artists:new Set(k.a), tracks:new Set(k.t), albums:new Set(k.al)};
   const A = new Set(), T = new Set(), AL = new Set();
-  const addT = tr => { if (!tr) return; T.add(tr.id); if (tr.album) AL.add(tr.album.id); (tr.artists||[]).forEach(a => A.add(a.id)); };
-  const quiet = p => p.catch(() => {});
-  const jobs = [];
+  const addT = tr => { if (!tr) return; T.add(tr.id); const al = tr.albumId || tr.album?.id; if (al) AL.add(al); (tr.artists||[]).forEach(a => A.add(a.id)); };
   for (const r of ['short_term','medium_term','long_term']){
-    jobs.push(quiet(api(`/me/top/artists?limit=50&time_range=${r}`).then(j => j.items.forEach(a => A.add(a.id)))));
-    jobs.push(quiet(api(`/me/top/tracks?limit=50&time_range=${r}`).then(j => j.items.forEach(addT))));
+    try{ const d = await loadTop(r); d.artists.forEach(a => A.add(a.id)); d.tracks.forEach(addT); }catch(e){ if (/limiting/.test(e.message)) throw e; }
   }
-  jobs.push(quiet(api('/me/player/recently-played?limit=50').then(j => j.items.forEach(x => addT(x.track)))));
-  for (const off of [0, 50, 100]) jobs.push(quiet(api(`/me/tracks?limit=50&offset=${off}`).then(j => j.items.forEach(x => addT(x.track)))));
-  jobs.push(quiet(api('/me/following?type=artist&limit=50').then(j => j.artists.items.forEach(a => A.add(a.id)))));
-  await Promise.all(jobs);
+  const steps = [
+    () => api('/me/player/recently-played?limit=50').then(j => j.items.forEach(x => addT(x.track))),
+    () => api('/me/tracks?limit=50').then(j => j.items.forEach(x => addT(x.track))),
+    () => api('/me/following?type=artist&limit=50').then(j => j.artists.items.forEach(a => A.add(a.id)))
+  ];
+  for (const step of steps){ try{ await step(); }catch(e){ if (/limiting/.test(e.message)) throw e; } }
   LS.set('known', {ts:Date.now(), a:[...A], t:[...T], al:[...AL]});
   return {artists:A, tracks:T, albums:AL};
 }
@@ -434,14 +462,14 @@ async function findNewArtist(seed, known, block){
     try{
       if (s === 'genre'){
         let g = meta['artist:' + seed.id]?.genres;
-        if (!g || !g.length){ const a = await api('/artists/' + seed.id); g = a.genres || []; }
+        if (!g || !g.length){ const a = await capi('/artists/' + seed.id); g = a.genres || []; }
         if (!g.length) continue;
         const genre = rpick(g);
-        const j = await api(`/search?type=artist&limit=10&offset=${rint(4) * 10}&q=${encodeURIComponent(`genre:"${genre}"`)}`);
+        const j = await capi(`/search?type=artist&limit=10&offset=${rint(4) * 10}&q=${encodeURIComponent(`genre:"${genre}"`)}`);
         const c = (j.artists?.items || []).filter(a => a && a.id !== seed.id && !known.artists.has(a.id) && !block.has(a.id));
         if (c.length) return {artist:rpick(c), via:`shares the ${genre} sound`};
       } else {
-        const j = await api(`/search?type=track&limit=10&offset=${rint(3) * 10}&q=${encodeURIComponent(`artist:"${seed.name}"`)}`);
+        const j = await capi(`/search?type=track&limit=10&offset=${rint(3) * 10}&q=${encodeURIComponent(`artist:"${seed.name}"`)}`);
         const c = [];
         (j.tracks?.items || []).forEach(t => { if (!t || !t.artists.some(a => a.id === seed.id)) return;
           t.artists.forEach(a => { if (a.id !== seed.id && !known.artists.has(a.id) && !block.has(a.id)) c.push(a); }); });
@@ -452,19 +480,19 @@ async function findNewArtist(seed, known, block){
   return null;
 }
 async function realize(type, artist, known, nope){
-  if (type === 'artist'){ const it = fromArtist(await api('/artists/' + artist.id)); return nope.has(it.k) ? null : it; }
+  if (type === 'artist'){ const it = fromArtist(await capi('/artists/' + artist.id)); return nope.has(it.k) ? null : it; }
   const groups = type === 'album' ? 'album' : 'album,single';
-  const first = await api(`/artists/${artist.id}/albums?include_groups=${groups}&limit=10`);
+  const first = await capi(`/artists/${artist.id}/albums?include_groups=${groups}&limit=10`);
   let items = first.items || [];
   if ((first.total || 0) > 10){
     const off = rint(Math.ceil(first.total / 10)) * 10;
-    if (off > 0){ try{ const more = await api(`/artists/${artist.id}/albums?include_groups=${groups}&limit=10&offset=${off}`); items = items.concat(more.items || []); }catch{} }
+    if (off > 0){ try{ const more = await capi(`/artists/${artist.id}/albums?include_groups=${groups}&limit=10&offset=${off}`); items = items.concat(more.items || []); }catch{} }
   }
   const als = items.filter(al => !nope.has('album:' + al.id) && (type !== 'album' || !known.albums.has(al.id)));
   if (!als.length) return null;
   const al = rpick(als);
   if (type === 'album') return fromAlbum(al);
-  const full = await api(`/albums/${al.id}`);
+  const full = await capi(`/albums/${al.id}`, 24 * 7);
   const ts = (full.tracks?.items || []).filter(t => !known.tracks.has(t.id) && !nope.has('track:' + t.id) && t.artists.some(a => a.id === artist.id));
   if (!ts.length) return null;
   const t = rpick(ts); t.album = al; return fromTrack(t);
@@ -486,7 +514,9 @@ async function spin(){
       let artist, via;
       if (type !== 'artist' && Math.random() < 0.35){ artist = {id:seed.id, name:seed.name}; via = null; }
       else { const c = await findNewArtist(seed, known, blockArtists); if (!c) continue; artist = c.artist; via = c.via; }
-      const item = await realize(type, artist, known, nope);
+      let item;
+      try{ item = await realize(type, artist, known, nope); }
+      catch(e){ if (/limiting|session/.test(e.message)) throw e; continue; }
       if (!item) continue;
       const why = via ? `${artist.name} ${via}. Picked because ${seed.why}.` : `Picked because ${seed.why}, and you haven\u2019t played this one yet.`;
       st.result = {item, why}; return;
@@ -531,7 +561,7 @@ async function loadUpdates(force){
       if (limited) break;
       for (const off of [0, 10]){
         try{
-          const j = await api(`/search?type=artist&limit=10&offset=${off}&q=${encodeURIComponent(`genre:"${g}"`)}`);
+          const j = await capi(`/search?type=artist&limit=10&offset=${off}&q=${encodeURIComponent(`genre:"${g}"`)}`);
           (j.artists?.items || []).forEach(a => addSim(a, `Because you like ${g}`, (a.genres || []).reduce((t, x) => t + (gw.get(x) || 0), 0)));
         }catch(e){ soft(e); }
       }
@@ -540,22 +570,22 @@ async function loadUpdates(force){
     await pool(seeds, 2, async sd => {
       if (limited) return;
       try{
-        const j = await api(`/search?type=track&limit=10&q=${encodeURIComponent(`artist:"${sd.name.replace(/"/g, '')}"`)}`);
+        const j = await capi(`/search?type=track&limit=10&q=${encodeURIComponent(`artist:"${sd.name.replace(/"/g, '')}"`)}`);
         (j.tracks?.items || []).forEach(t => { if (!t || !t.artists.some(a => a.id === sd.id)) return;
           t.artists.forEach(a => { if (a.id !== sd.id) addSim(a, `Has worked with ${sd.name}`, sd.w * 3); }); });
       }catch(e){ soft(e); }
     });
 
     // 4. Ask Spotify which of these artists released something in the last two weeks, keep the past 7 days
-    const yours = [...mine.values()].sort((a, b) => b.w - a.w).slice(0, 30).map(a => ({...a, mine:true, score:1000 + a.w}));
-    const others = [...similar.values()].sort((a, b) => b.score - a.score).slice(0, 45);
+    const yours = [...mine.values()].sort((a, b) => b.w - a.w).slice(0, 25).map(a => ({...a, mine:true, score:1000 + a.w}));
+    const others = [...similar.values()].sort((a, b) => b.score - a.score).slice(0, 30);
     const cands = [...yours, ...others];
     st.updStep = `Checking ${cands.length} artists for music released this week\u2026`; render();
     const out = [], got = new Set();
-    await pool(cands, 3, async c => {
+    await pool(cands, 2, async c => {
       if (limited) return;
       try{
-        const j = await api(`/search?type=album&limit=10&q=${encodeURIComponent(`artist:"${c.name.replace(/"/g, '')}" tag:new`)}`);
+        const j = await capi(`/search?type=album&limit=10&q=${encodeURIComponent(`artist:"${c.name.replace(/"/g, '')}" tag:new`)}`, 12);
         (j.albums?.items || []).forEach(al => {
           if (!al || got.has(al.id) || !al.artists.some(a => a.id === c.id)) return;
           if (al.release_date_precision !== 'day') return;
