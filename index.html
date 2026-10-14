@@ -318,13 +318,18 @@ async function findNewArtist(seed, known, block){
 async function realize(type, artist, known, nope){
   if (type === 'artist'){ const it = fromArtist(await api('/artists/' + artist.id)); return nope.has(it.k) ? null : it; }
   const groups = type === 'album' ? 'album' : 'album,single';
-  const j = await api(`/artists/${artist.id}/albums?include_groups=${groups}&limit=20`);
-  let als = (j.items || []).filter(al => !nope.has('album:' + al.id) && (type !== 'album' || !known.albums.has(al.id)));
+  const first = await api(`/artists/${artist.id}/albums?include_groups=${groups}&limit=10`);
+  let items = first.items || [];
+  if ((first.total || 0) > 10){
+    const off = rint(Math.ceil(first.total / 10)) * 10;
+    if (off > 0){ try{ const more = await api(`/artists/${artist.id}/albums?include_groups=${groups}&limit=10&offset=${off}`); items = items.concat(more.items || []); }catch{} }
+  }
+  const als = items.filter(al => !nope.has('album:' + al.id) && (type !== 'album' || !known.albums.has(al.id)));
   if (!als.length) return null;
   const al = rpick(als);
   if (type === 'album') return fromAlbum(al);
-  const tj = await api(`/albums/${al.id}/tracks?limit=50`);
-  const ts = (tj.items || []).filter(t => !known.tracks.has(t.id) && !nope.has('track:' + t.id) && t.artists.some(a => a.id === artist.id));
+  const full = await api(`/albums/${al.id}`);
+  const ts = (full.tracks?.items || []).filter(t => !known.tracks.has(t.id) && !nope.has('track:' + t.id) && t.artists.some(a => a.id === artist.id));
   if (!ts.length) return null;
   const t = rpick(ts); t.album = al; return fromTrack(t);
 }
